@@ -15,6 +15,7 @@ WriteMakefile(
 		  'NEXT'            => 0,
 		  'Carp'            => 0,
 		  'URI'             => 0,
+		  'Class::Accessor' => 0,
 		 },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Catalyst-Model-XML-Feed-*' },

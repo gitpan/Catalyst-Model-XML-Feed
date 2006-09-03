@@ -3,8 +3,8 @@ Changes
 lib/Catalyst/Model/XML/Feed.pm
 lib/Catalyst/Model/XML/Feed/Item.pm
 Makefile.PL
-MANIFEST
-META.yml			# Will be created by "make dist"
+MANIFEST			This list of files
+META.yml
 README
 t/00-load.t
 t/01-add-feeds.t

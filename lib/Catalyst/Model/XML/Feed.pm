@@ -3,12 +3,14 @@ package Catalyst::Model::XML::Feed;
 use warnings;
 use strict;
 
-use base qw(Catalyst::Model);
+use base qw(Catalyst::Model Class::Accessor);
 use Carp;
 use XML::Feed;
 use NEXT;
 use URI;
 use Catalyst::Model::XML::Feed::Item;
+
+__PACKAGE__->mk_accessors(qw|ttl feeds|);
 
 =head1 NAME
 
@@ -16,11 +18,11 @@ Catalyst::Model::XML::Feed - Use RSS/Atom feeds as a Catalyst Model
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -55,12 +57,15 @@ Catalyst::Model::XML::Feed allows you to use XML feeds in your
 Catalyst application.  To use a feed, you need to register it with
 the C<register> method.
 
-If you'd like feeds to be cached, you'll need 
+Once a feed is registered, it's automatically cached for you.
 
 =head1 CONFIGURATION
 
-Configuration is accepted via the standard Catalyst method.  Valid
-keys include:
+Configuration is accepted via the standard Catalyst method:
+
+    $c->config->{Model::Feeds}->{key} = $value;
+
+Valid keys include:
 
 =over 4
 
@@ -101,22 +106,23 @@ so be careful.
 sub new {
     my $self = shift;
     $self = $self->NEXT::new(@_);
-    $self->{_feeds} = {};
+    my @in_feeds = eval { @{$self->feeds} };
+    $self->feeds({});
     
-    $self->{_ttl} = $self->{ttl} || 3600;
-    foreach my $feed (@{$self->{feeds}}) {
+    $self->ttl($self->ttl || 3600);
+    foreach my $feed (@in_feeds) {
 	my $name = $feed->{name} || $feed->{title};
 	my $uri  = $feed->{uri}  || $feed->{location};
-	my $c = $_[0];
+	#my $c = $_[0];
 	if($name){
-	    $c->log->debug("registering XML feed $uri as $name") if $c;
+	    #$c->log->debug("registering XML feed $uri as $name") if $c;
 	    $self->register($name, $uri);
 	}
 	else {
-	    $c->log->debug("registering XML feed $uri") if $c;
+	    #$c->log->debug("registering XML feed $uri") if $c;
 	    my @names = $self->register($uri);
 	    my $name = join q{,},@names;
-	    $c->log->debug("feed(s) at $uri created as $name") if $c;
+	    #$c->log->debug("feed(s) at $uri created as $name") if $c;
 	}
     }
     
@@ -201,8 +207,7 @@ sub _add_uri {
     my $obj  = Catalyst::Model::XML::Feed::Item->new($feed, $uri);    
     $name ||= $uri;
     
-    $self->{_feeds}->{$name} = $obj;
-    $self->{_ttl} = 3600;
+    $self->feeds->{$name} = $obj;
     return $name;
 }
 
@@ -213,7 +218,7 @@ Returns the names of all registered feeds.
 =cut
 
 sub names {
-    return keys %{$_[0]->{_feeds}};
+    return keys %{$_[0]->feeds};
 }
 
 =head2 get_all_feeds
@@ -225,10 +230,11 @@ C<XML::Feed> objects.
 
 sub get_all_feeds {
     my $self  = shift;
-    my %feeds = %{$self->{_feeds}};
+    my @names = $self->names;
     my @feeds;
-    foreach my $feed_ref (values %feeds){
-	push @feeds, $feed_ref->feed;
+    foreach my $name (@names){
+	my $feed = $self->get($name);
+	push @feeds, $feed;
     }
     return @feeds;
 }
@@ -243,13 +249,12 @@ an exception if there is no feed that's named C<$name>.
 sub get {
     my $self = shift;
     my $name = shift;
-    my $feed = $self->{_feeds}->{$name};
+    my $feed = $self->feeds->{$name};
     croak "No feed named $name" if !ref $feed;
 
     # refresh the feed if it's too old
-    if(time - $feed->updated > $self->{_ttl}){
-	$self->_refresh_feed($feed->uri, $name);
-	$feed = $self->{_feeds}->{$name};
+    if(time - $feed->updated > $self->ttl){
+	$self->_refresh($name);
     }
     
     return $feed->feed;
@@ -270,7 +275,7 @@ sub refresh {
 	$self->_refresh($name);
     }
     else {
-	foreach my $name (keys %{$self->{_feeds}}){
+	foreach my $name (keys %{$self->feeds}){
 	    $self->_refresh($name);
 	}
     }
@@ -281,7 +286,7 @@ sub refresh {
 sub _refresh {
     my $self = shift;
     my $name = shift;
-    my $feed = $self->{_feeds}->{$name};
+    my $feed = $self->feeds->{$name};
     croak "No feed named $name" if !ref $feed;
     
     my $uri  = $feed->uri;
@@ -292,8 +297,8 @@ sub _refresh {
 
 =head2 %s does not reference any feeds
 
-The URI you passed to C<register> did was not a feed, or did not
-link to any feeds
+The URI you passed to C<register> was not a feed, or did not
+C<link> to any feeds.
 
 =head2 %s points to too many feeds
 
@@ -344,6 +349,10 @@ L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Catalyst-Model-XML-Feed>
 L<http://search.cpan.org/dist/Catalyst-Model-XML-Feed>
 
 =back
+
+=head1 SEE ALSO
+
+L<XML::Feed> and L<XML::Feed::Entry>
 
 =head1 ACKNOWLEDGEMENTS
 
