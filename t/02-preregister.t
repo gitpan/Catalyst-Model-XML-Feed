@@ -2,16 +2,22 @@
 # 02-preregister.t 
 # Copyright (c) 2006 Jonathan Rockway <jrockway@cpan.org>
 
-use strict;
-use warnings;
-use Test::More tests => 6;
-BEGIN { use_ok('Catalyst::Model::XML::Feed'); }
+    use strict;
+    use warnings;
+    use Test::More;
+    BEGIN { 
+        plan skip_all => "Set TEST_LIVE environment variable to run live tests." 
+            unless $ENV{TEST_LIVE};
+    plan tests => 6;
+    use_ok('Catalyst::Model::XML::Feed'); 
+    
+}
 
 my $model = Catalyst::Model::XML::Feed->
   new(undef, 
       {feeds => [
-		 {title => 'delicious', uri => 'http://del.icio.us/rss/'},
-		 {location => 'http://blog.jrock.us/'},
+		 {title => 'delicious', uri => 'http://feeds.delicious.com/v2/rss/'},
+		 {location => 'http://googleblog.blogspot.com/'},
 		]
       },
      );

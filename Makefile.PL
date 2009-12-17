@@ -12,7 +12,7 @@ WriteMakefile(
 		  'Catalyst::Model' => 0,
 		  'XML::Feed'       => '0.11',
 		  'Test::More'      => 0,
-		  'NEXT'            => 0,
+		  'MRO::Compat'     => 0,
 		  'Carp'            => 0,
 		  'URI'             => 0,
 		  'Class::Accessor' => 0,

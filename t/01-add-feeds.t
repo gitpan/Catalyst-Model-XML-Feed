@@ -4,14 +4,19 @@
 
 use strict;
 use warnings;
-use Test::More tests => 10;
-BEGIN { use_ok('Catalyst::Model::XML::Feed'); }
+use Test::More;
+BEGIN { 
+    plan skip_all => "Set TEST_LIVE environment variable to run live tests." 
+        unless $ENV{TEST_LIVE};
+    plan tests => 10;
+    use_ok('Catalyst::Model::XML::Feed'); 
+}
 
 my $model = Catalyst::Model::XML::Feed->new;
 ok($model, 'created model');
 
 eval {
-    $model->register('delicious', 'http://del.icio.us/rss/');
+    $model->register('delicious', 'http://feeds.delicious.com/v2/rss/');
 };
 ok(!$@, 'no error registering delicious feed');
 is(scalar $model->get_all_feeds, 1, 'one feed added');

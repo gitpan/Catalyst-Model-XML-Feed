@@ -6,7 +6,7 @@ use strict;
 use base qw(Catalyst::Model Class::Accessor);
 use Carp;
 use XML::Feed;
-use NEXT;
+use MRO::Compat;
 use URI;
 use Catalyst::Model::XML::Feed::Item;
 
@@ -18,11 +18,11 @@ Catalyst::Model::XML::Feed - Use RSS/Atom feeds as a Catalyst Model
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -105,27 +105,27 @@ so be careful.
 
 sub new {
     my $self = shift;
-    $self = $self->NEXT::new(@_);
+    $self = $self->next::method(@_);
     my @in_feeds = eval { @{$self->feeds} };
     $self->feeds({});
-    
+
     $self->ttl($self->ttl || 3600);
     foreach my $feed (@in_feeds) {
-	my $name = $feed->{name} || $feed->{title};
-	my $uri  = $feed->{uri}  || $feed->{location};
-	#my $c = $_[0];
-	if($name){
-	    #$c->log->debug("registering XML feed $uri as $name") if $c;
-	    $self->register($name, $uri);
-	}
-	else {
-	    #$c->log->debug("registering XML feed $uri") if $c;
-	    my @names = $self->register($uri);
-	    my $name = join q{,},@names;
-	    #$c->log->debug("feed(s) at $uri created as $name") if $c;
-	}
+        my $name = $feed->{name} || $feed->{title};
+        my $uri  = $feed->{uri}  || $feed->{location};
+        #my $c = $_[0];
+        if($name){
+            #$c->log->debug("registering XML feed $uri as $name") if $c;
+            $self->register($name, $uri);
+        }
+        else {
+            #$c->log->debug("registering XML feed $uri") if $c;
+            my @names = $self->register($uri);
+            my $name = join q{,},@names;
+            #$c->log->debug("feed(s) at $uri created as $name") if $c;
+        }
     }
-    
+
     return $self;
 }
 
@@ -161,40 +161,41 @@ sub register {
 
     my $name;
     my $uri;
-    
+
     if($arg2){
-	# get only one feed
-	$name = $arg1;
-	$uri  = URI->new($arg2);
-	my $feed;
-	eval {
-	    $feed = XML::Feed->parse($uri);
-	};
-	if($@){
-	    my @feeds = XML::Feed->find_feeds($arg2);
-	    if(@feeds > 1){
-		croak "$arg2 points to too many feeds";
-	    }
-	    if(!@feeds){
-		croak "$arg2 does not reference any feeds";
-	    }
-	    $uri = shift @feeds;
-	}
-	
-	return $self->_add_uri($uri, $name);
+        # get only one feed
+        $name = $arg1;
+        $uri  = URI->new($arg2);
+        my $feed;
+        eval {
+            $feed = XML::Feed->parse($uri)
+                or die XML::Feed->errstr;
+        };
+        if($@){
+            my @feeds = XML::Feed->find_feeds($arg2);
+            if(@feeds > 1){
+                croak "$arg2 points to too many feeds";
+            }
+            if(!@feeds){
+                croak "$arg2 does not reference any feeds";
+            }
+            $uri = shift @feeds;
+        }
+
+        return $self->_add_uri($uri, $name);
     }
     else {
-	$uri = URI->new($arg1);
-	my @feed_uris = XML::Feed->find_feeds($uri);
-	croak "$arg1 does not reference any feeds" if !@feed_uris;
-	
-	my @added;
-	foreach my $uri (@feed_uris){
-	    $uri = URI->new($uri);
-	    my $name = $self->_add_uri($uri);
-	    push @added, $name if $name;
-	}
-	return @added;
+        $uri = URI->new($arg1);
+        my @feed_uris = XML::Feed->find_feeds($uri);
+        croak "$arg1 does not reference any feeds" if !@feed_uris;
+
+        my @added;
+        foreach my $uri (@feed_uris){
+            $uri = URI->new($uri);
+            my $name = $self->_add_uri($uri);
+            push @added, $name if $name;
+        }
+        return @added;
     }
 }
 
@@ -202,11 +203,18 @@ sub _add_uri {
     my $self = shift;
     my $uri  = shift;
     my $name = shift;
-    my $feed = XML::Feed->parse($uri);
+    my $feed;
+    eval {
+        $feed = XML::Feed->parse($uri)
+            or die XML::Feed->errstr;
+    };
+    if (my $err = $@) {
+        croak "Failed to parse feed $uri: $@";
+    }
     $feed->title($name) if $name;
-    my $obj  = Catalyst::Model::XML::Feed::Item->new($feed, $uri);    
+    my $obj  = Catalyst::Model::XML::Feed::Item->new($feed, $uri);
     $name ||= $uri;
-    
+
     $self->feeds->{$name} = $obj;
     return $name;
 }
@@ -233,8 +241,8 @@ sub get_all_feeds {
     my @names = $self->names;
     my @feeds;
     foreach my $name (@names){
-	my $feed = $self->get($name);
-	push @feeds, $feed;
+        my $feed = $self->get($name);
+        push @feeds, $feed;
     }
     return @feeds;
 }
@@ -254,9 +262,9 @@ sub get {
 
     # refresh the feed if it's too old
     if(time - $feed->updated > $self->ttl){
-	$self->_refresh($name);
+        $self->_refresh($name);
     }
-    
+
     return $feed->feed;
 }
 
@@ -270,16 +278,16 @@ is omitted, refreshes all registered feeds.
 sub refresh {
     my $self = shift;
     my $name = shift;
-    
+
     if($name){
-	$self->_refresh($name);
+        $self->_refresh($name);
     }
     else {
-	foreach my $name (keys %{$self->feeds}){
-	    $self->_refresh($name);
-	}
+        foreach my $name (keys %{$self->feeds}){
+            $self->_refresh($name);
+        }
     }
-    
+
     return;
 }
 
@@ -288,7 +296,7 @@ sub _refresh {
     my $name = shift;
     my $feed = $self->feeds->{$name};
     croak "No feed named $name" if !ref $feed;
-    
+
     my $uri  = $feed->uri;
     return $self->_add_uri($uri, $name);
 }

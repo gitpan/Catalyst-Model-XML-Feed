@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# Item.pm 
+# Item.pm
 # Copyright (c) 2006 Jonathan Rockway <jrockway@cpan.org>
 
 package Catalyst::Model::XML::Feed::Item;
@@ -8,12 +8,12 @@ use warnings;
 
 sub new {
     my ($class, $feed, $uri) = @_;
-    my $self = 
+    my $self =
       { _feed    => $feed,
-	_uri     => $uri,
-	_updated => time,
+        _uri     => $uri,
+        _updated => time,
       };
-    
+
     bless $self, $class;
     return $self;
 }
