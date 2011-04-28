@@ -18,11 +18,11 @@ Catalyst::Model::XML::Feed - Use RSS/Atom feeds as a Catalyst Model
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -98,8 +98,9 @@ C<Feeds>):
 =head2 new
 
 Creates a new instance.  Called for you by Catalyst.  If your config
-file contains invalid feeds, this will die and kill your entire app,
-so be careful.
+file contains invalid feeds the feed will be refetched when the feed
+content is accessed. This allows your Catalyst app to start even in
+the case of an external outage of an RSS feed.
 
 =cut
 
@@ -138,7 +139,7 @@ feeds, all feeds are added by using their URIs as their names.
 
 Returns a list of the names of the feeds that were added.
 
-Throws an exception if the C<$uri_of_feeds> doesn't contain a feed
+Warns if the C<$uri_of_feeds> doesn't contain a feed
 or links to feeds, or it cannot be fetched.
 
 =head2 register($name, $uri_of_feed)
@@ -148,7 +149,7 @@ the old feed at C<$name> is forgotten and replaced with the new feed
 at C<$uri_of_feed>.  The C<title> of the feed is replaced with
 C<$name>.
 
-Throws an exception if C<$uri_of_feed> isn't an XML feed (or doesn't
+Warns if C<$uri_of_feed> isn't an XML feed (or doesn't
 contain a C<link> to one).  
 
 Throws an exception if the C<$uri_of_feed> links to multiple feeds.
@@ -177,9 +178,11 @@ sub register {
                 croak "$arg2 points to too many feeds";
             }
             if(!@feeds){
-                croak "$arg2 does not reference any feeds";
-            }
-            $uri = shift @feeds;
+                carp "$arg2 does not reference any feeds";
+		# register $uri as it is, but without the feed, in hope that it comes online later.
+            } else {
+		$uri = shift @feeds;
+	    }
         }
 
         return $self->_add_uri($uri, $name);
@@ -204,12 +207,17 @@ sub _add_uri {
     my $uri  = shift;
     my $name = shift;
     my $feed;
+
     eval {
         $feed = XML::Feed->parse($uri)
             or die XML::Feed->errstr;
     };
     if (my $err = $@) {
-        croak "Failed to parse feed $uri: $@";
+        carp "Failed to parse feed $uri: $@";
+	my $key = $name || $uri;
+	# Create feed item without the parsed content then
+	$self->feeds->{$key} = Catalyst::Model::XML::Feed::Item->new(undef, $uri);
+	return $key;
     }
     $feed->title($name) if $name;
     my $obj  = Catalyst::Model::XML::Feed::Item->new($feed, $uri);
@@ -260,9 +268,11 @@ sub get {
     my $feed = $self->feeds->{$name};
     croak "No feed named $name" if !ref $feed;
 
-    # refresh the feed if it's too old
-    if(time - $feed->updated > $self->ttl){
+    # refresh the feed if it's too old or if previous fetch failed
+    if((time - $feed->updated > $self->ttl) or !defined($feed->feed)) {
         $self->_refresh($name);
+	# must update the ref after the refresh for this run of the sub to return the fresh info.
+	$feed = $self->feeds->{$name};
     }
 
     return $feed->feed;
